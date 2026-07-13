@@ -51,6 +51,7 @@ public class GrpcTransport implements OpenSearchTransport {
     private final JsonpMapper jsonpMapper;
     private final GrpcTransportOptions grpcOptions;
     private final TransportOptions transportOptions;
+    private final GrpcChannelHealthMonitor healthMonitor;
 
     GrpcTransport(ManagedChannel channel, JsonpMapper jsonpMapper,
                   GrpcTransportOptions grpcOptions, @Nullable TransportOptions transportOptions) {
@@ -59,6 +60,13 @@ public class GrpcTransport implements OpenSearchTransport {
         this.jsonpMapper = jsonpMapper;
         this.grpcOptions = grpcOptions;
         this.transportOptions = transportOptions;
+        this.healthMonitor = channel != null ? new GrpcChannelHealthMonitor(channel) : null;
+
+        // Start monitoring channel health and warm up the connection
+        if (this.healthMonitor != null) {
+            this.healthMonitor.startMonitoring();
+            this.healthMonitor.connectIfIdle();
+        }
     }
 
     @Override
@@ -115,6 +123,9 @@ public class GrpcTransport implements OpenSearchTransport {
         if (channel == null) {
             return;
         }
+        if (healthMonitor != null) {
+            healthMonitor.stopMonitoring();
+        }
         try {
             channel.shutdown();
             if (!channel.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -132,6 +143,23 @@ public class GrpcTransport implements OpenSearchTransport {
      */
     public ManagedChannel channel() {
         return channel;
+    }
+
+    /**
+     * Returns the channel health monitor for checking connectivity state.
+     * <p>
+     * Usage:
+     * <pre>{@code
+     * if (transport.healthMonitor().isReady()) {
+     *     // channel is connected
+     * }
+     *
+     * // Wait for connection (useful at startup)
+     * transport.healthMonitor().waitForReady(5, TimeUnit.SECONDS);
+     * }</pre>
+     */
+    public GrpcChannelHealthMonitor healthMonitor() {
+        return healthMonitor;
     }
 
     /**
