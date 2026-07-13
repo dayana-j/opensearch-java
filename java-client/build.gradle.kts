@@ -81,6 +81,10 @@ java {
     registerFeature("awsSdk2Support") {
         usingSourceSet(sourceSets.get("main"))
     }
+
+    registerFeature("grpcSupport") {
+        usingSourceSet(sourceSets.get("main"))
+    }
     
     toolchain {
       languageVersion = JavaLanguageVersion.of(runtimeJavaVersion.majorVersion)
@@ -247,6 +251,24 @@ dependencies {
     testImplementation("software.amazon.awssdk", "netty-nio-client", "[2.21,3.0)")
     testImplementation("software.amazon.awssdk", "url-connection-client", "[2.21,3.0)")
     testImplementation("software.amazon.awssdk", "sts", "[2.21,3.0)")
+
+    // For GrpcTransport
+    val grpcVersion = "1.68.0"
+    val protobufVersion = "3.25.5"
+    val opensearchProtobufVersion = "1.2.0"
+    "grpcSupportCompileOnly"("io.grpc", "grpc-api", grpcVersion)
+    "grpcSupportCompileOnly"("io.grpc", "grpc-stub", grpcVersion)
+    "grpcSupportCompileOnly"("io.grpc", "grpc-protobuf", grpcVersion)
+    "grpcSupportCompileOnly"("io.grpc", "grpc-netty-shaded", grpcVersion)
+    "grpcSupportCompileOnly"("com.google.protobuf", "protobuf-java", protobufVersion)
+    "grpcSupportCompileOnly"("org.opensearch", "protobufs", opensearchProtobufVersion)
+    testImplementation("io.grpc", "grpc-api", grpcVersion)
+    testImplementation("io.grpc", "grpc-stub", grpcVersion)
+    testImplementation("io.grpc", "grpc-protobuf", grpcVersion)
+    testImplementation("io.grpc", "grpc-netty-shaded", grpcVersion)
+    testImplementation("io.grpc", "grpc-testing", grpcVersion)
+    testImplementation("com.google.protobuf", "protobuf-java", protobufVersion)
+    testImplementation("org.opensearch", "protobufs", opensearchProtobufVersion)
 
     testImplementation("org.apache.logging.log4j", "log4j-api","[2.17.1,3.0)") {
         exclude(group = "com.github.spotbugs", module = "spotbugs-annotations")
