@@ -23,44 +23,37 @@ import org.opensearch.common.settings.Settings;
 /**
  * Transport support for gRPC integration tests.
  * <p>
- * Creates a {@link HybridTransport} that routes Bulk over gRPC (port 9400)
- * and everything else over REST (port 9200).
- * <p>
- * Assumes the test cluster has gRPC enabled with:
- * <pre>
- * aux.transport.types: [transport-grpc]
- * aux.transport.transport-grpc.port: '9400'
- * </pre>
+ * Builds a {@link HybridTransport} that routes Bulk over gRPC and everything else over REST.
+ * Used as a mixin interface on concrete test classes (same pattern as {@code HttpClient5TransportSupport}).
  */
 interface GrpcTransportSupport extends OpenSearchTransportSupport {
 
-    /**
-     * Default gRPC port for the test cluster.
-     */
-    int GRPC_PORT = 9400;
-
     @Override
     default OpenSearchTransport buildTransport(Settings settings, HttpHost[] hosts) throws IOException {
-        // Build the REST transport for fallback
-        final ApacheHttpClient5TransportBuilder restBuilder = ApacheHttpClient5TransportBuilder.builder(hosts);
-        final OpenSearchTransport restTransport = restBuilder.build();
+        // Build REST transport for non-bulk operations
+        final OpenSearchTransport restTransport = ApacheHttpClient5TransportBuilder.builder(hosts).build();
 
-        // Build the gRPC transport pointing to the same host but on port 9400
-        String grpcHost = hosts[0].getHostName();
-        int grpcPort = Integer.parseInt(
-            Optional.ofNullable(System.getProperty("tests.grpc.port")).orElse(String.valueOf(GRPC_PORT))
-        );
+        // Determine gRPC host/port from system property or derive from REST host
+        String grpcCluster = System.getProperty("tests.grpc.cluster");
+        String grpcHost;
+        int grpcPort;
 
-        GrpcTransportOptions grpcOptions = GrpcTransportOptions.builder()
-            .maxRetries(1) // Don't retry too much in tests
-            .build();
+        if (grpcCluster != null && !grpcCluster.isEmpty()) {
+            String[] parts = grpcCluster.split(":");
+            grpcHost = parts[0];
+            grpcPort = Integer.parseInt(parts[1]);
+        } else {
+            // Default: same host as REST, port 9400
+            grpcHost = hosts[0].getHostName();
+            grpcPort = GrpcTestContainerRule.GRPC_PORT;
+        }
 
+        // Build gRPC transport
         GrpcTransport grpcTransport = GrpcTransport.builder(grpcHost, grpcPort)
             .jsonpMapper(new JacksonJsonpMapper())
-            .grpcOptions(grpcOptions)
+            .grpcOptions(GrpcTransportOptions.builder().maxRetries(2).build())
             .build();
 
-        // Combine into HybridTransport: bulk → gRPC, everything else → REST
         return new HybridTransport(grpcTransport, restTransport);
     }
 }
