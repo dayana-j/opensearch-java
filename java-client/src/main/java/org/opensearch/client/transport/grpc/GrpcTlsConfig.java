@@ -55,6 +55,7 @@ public final class GrpcTlsConfig {
     private final String trustStorePath;
     private final String trustStorePassword;
     private final String trustStoreType;
+    private final String hostnameOverride;
 
     private GrpcTlsConfig(Builder builder) {
         this.enabled = builder.enabled;
@@ -66,6 +67,7 @@ public final class GrpcTlsConfig {
         this.trustStorePath = builder.trustStorePath;
         this.trustStorePassword = builder.trustStorePassword;
         this.trustStoreType = builder.trustStoreType;
+        this.hostnameOverride = builder.hostnameOverride;
     }
 
     /**
@@ -141,6 +143,26 @@ public final class GrpcTlsConfig {
     }
 
     /**
+     * Override the hostname used for TLS certificate verification.
+     * <p>
+     * Useful when connecting to a server via IP address or a different hostname
+     * than what appears in the server's certificate SAN (Subject Alternative Name).
+     * <p>
+     * Example: connecting to {@code 10.0.0.1:9400} but the cert has SAN {@code my-cluster.example.com}:
+     * <pre>{@code
+     * GrpcTlsConfig.builder()
+     *     .hostnameOverride("my-cluster.example.com")
+     *     .build();
+     * }</pre>
+     *
+     * @return the hostname to verify against, or null to use the connection hostname (default)
+     */
+    @Nullable
+    public String hostnameOverride() {
+        return hostnameOverride;
+    }
+
+    /**
      * Returns a simple TLS config that trusts all certificates (insecure).
      * For development and testing only.
      */
@@ -162,6 +184,7 @@ public final class GrpcTlsConfig {
         private String trustStorePath;
         private String trustStorePassword;
         private String trustStoreType = "JKS";
+        private String hostnameOverride;
 
         public Builder enabled(boolean enabled) {
             this.enabled = enabled;
@@ -230,6 +253,19 @@ public final class GrpcTlsConfig {
          */
         public Builder trustStoreType(String type) {
             this.trustStoreType = type;
+            return this;
+        }
+
+        /**
+         * Override the hostname used for TLS certificate hostname verification.
+         * <p>
+         * Maps to gRPC's {@code NettyChannelBuilder.overrideAuthority()}.
+         * Use when connecting via IP but the server cert has a DNS name in SAN.
+         *
+         * @param hostname the hostname to verify the certificate against
+         */
+        public Builder hostnameOverride(String hostname) {
+            this.hostnameOverride = hostname;
             return this;
         }
 

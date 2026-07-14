@@ -91,6 +91,12 @@ public final class GrpcChannelFactory {
         NettyChannelBuilder builder = NettyChannelBuilder.forAddress(host, port)
             .sslContext(sslContext);
 
+        // Hostname verification override — verify cert against a different hostname
+        // than the one we're connecting to. Useful when connecting via IP.
+        if (tlsConfig.hostnameOverride() != null) {
+            builder.overrideAuthority(tlsConfig.hostnameOverride());
+        }
+
         applyOptions(builder, options);
         applyInterceptors(builder, interceptors);
 
