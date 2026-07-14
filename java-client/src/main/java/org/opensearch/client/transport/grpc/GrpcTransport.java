@@ -224,6 +224,7 @@ public class GrpcTransport implements OpenSearchTransport {
         private String basicAuthUsername;
         private String basicAuthPassword;
         private GrpcSigV4Config sigV4Config;
+        private java.util.function.Supplier<String> jwtTokenSupplier;
         private final java.util.List<io.grpc.ClientInterceptor> interceptors = new java.util.ArrayList<>();
         private ManagedChannel channel; // allow injecting channel for testing
 
@@ -322,6 +323,29 @@ public class GrpcTransport implements OpenSearchTransport {
         }
 
         /**
+         * Configures JWT Bearer token authentication for the gRPC channel.
+         * <p>
+         * The token supplier is called on every gRPC request to support
+         * automatic token refresh when tokens expire.
+         * <p>
+         * Example:
+         * <pre>{@code
+         * // Static token
+         * .jwtAuth(() -> "my-jwt-token")
+         *
+         * // Token from a provider that handles refresh
+         * .jwtAuth(() -> myTokenProvider.getAccessToken())
+         * }</pre>
+         *
+         * @param tokenSupplier supplies the JWT token (without "Bearer " prefix)
+         * @see <a href="https://docs.opensearch.org/latest/security/authentication-backends/jwt/">OpenSearch JWT</a>
+         */
+        public Builder jwtAuth(java.util.function.Supplier<String> tokenSupplier) {
+            this.jwtTokenSupplier = tokenSupplier;
+            return this;
+        }
+
+        /**
          * Inject a pre-built channel (primarily for testing).
          * When set, TLS config and interceptors are ignored.
          */
@@ -354,6 +378,11 @@ public class GrpcTransport implements OpenSearchTransport {
                         );
                     }
                     allInterceptors.add(new GrpcSigV4Interceptor(sigV4Config, host));
+                }
+
+                // JWT auth interceptor
+                if (jwtTokenSupplier != null) {
+                    allInterceptors.add(new JwtAuthInterceptor(jwtTokenSupplier));
                 }
 
                 // Add any custom interceptors
