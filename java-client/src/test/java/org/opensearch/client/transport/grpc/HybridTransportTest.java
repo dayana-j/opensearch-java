@@ -70,7 +70,7 @@ public class HybridTransportTest {
      */
     static class FailingGrpcTransport extends GrpcTransport {
         FailingGrpcTransport(JsonpMapper mapper) {
-            super(null, mapper, GrpcTransportOptions.defaults(), null);
+            super(null, mapper, GrpcTransportOptions.defaults(), null, null);
         }
 
         @Override
