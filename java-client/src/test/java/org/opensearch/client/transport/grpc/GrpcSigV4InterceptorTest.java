@@ -54,7 +54,7 @@ public class GrpcSigV4InterceptorTest {
     public void testSignedHeadersContainAuthorization() {
         GrpcSigV4Interceptor interceptor = createInterceptor(false);
         Map<String, List<String>> headers = interceptor.signRequest(
-            "opensearch.DocumentService/Bulk", new byte[0]
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
         );
 
         assertTrue("Should contain authorization header",
@@ -65,7 +65,7 @@ public class GrpcSigV4InterceptorTest {
     public void testSignedHeadersContainAmzDate() {
         GrpcSigV4Interceptor interceptor = createInterceptor(false);
         Map<String, List<String>> headers = interceptor.signRequest(
-            "opensearch.DocumentService/Bulk", new byte[0]
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
         );
 
         assertTrue("Should contain X-Amz-Date header",
@@ -76,7 +76,7 @@ public class GrpcSigV4InterceptorTest {
     public void testSignedHeadersContainContentSha256() {
         GrpcSigV4Interceptor interceptor = createInterceptor(false);
         Map<String, List<String>> headers = interceptor.signRequest(
-            "opensearch.DocumentService/Bulk", new byte[0]
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
         );
 
         assertTrue("Should contain X-Amz-Content-Sha256 header",
@@ -87,7 +87,7 @@ public class GrpcSigV4InterceptorTest {
     public void testSessionTokenIncludedWhenProvided() {
         GrpcSigV4Interceptor interceptor = createInterceptor(true);
         Map<String, List<String>> headers = interceptor.signRequest(
-            "opensearch.DocumentService/Bulk", new byte[0]
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
         );
 
         assertTrue("Should contain X-Amz-Security-Token header",
@@ -98,7 +98,7 @@ public class GrpcSigV4InterceptorTest {
     public void testNoSessionTokenWithBasicCredentials() {
         GrpcSigV4Interceptor interceptor = createInterceptor(false);
         Map<String, List<String>> headers = interceptor.signRequest(
-            "opensearch.DocumentService/Bulk", new byte[0]
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
         );
 
         assertFalse("Should NOT contain X-Amz-Security-Token with basic credentials",
@@ -109,7 +109,7 @@ public class GrpcSigV4InterceptorTest {
     public void testAuthorizationContainsAWS4Signature() {
         GrpcSigV4Interceptor interceptor = createInterceptor(false);
         Map<String, List<String>> headers = interceptor.signRequest(
-            "opensearch.DocumentService/Bulk", new byte[0]
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
         );
 
         String authHeader = getHeaderValue(headers, "Authorization", "authorization");
@@ -122,7 +122,7 @@ public class GrpcSigV4InterceptorTest {
     public void testAuthorizationContainsRegion() {
         GrpcSigV4Interceptor interceptor = createInterceptor(false);
         Map<String, List<String>> headers = interceptor.signRequest(
-            "opensearch.DocumentService/Bulk", new byte[0]
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
         );
 
         String authHeader = getHeaderValue(headers, "Authorization", "authorization");
@@ -134,7 +134,7 @@ public class GrpcSigV4InterceptorTest {
     public void testAuthorizationContainsServiceName() {
         GrpcSigV4Interceptor interceptor = createInterceptor(false);
         Map<String, List<String>> headers = interceptor.signRequest(
-            "opensearch.DocumentService/Bulk", new byte[0]
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
         );
 
         String authHeader = getHeaderValue(headers, "Authorization", "authorization");
@@ -155,7 +155,7 @@ public class GrpcSigV4InterceptorTest {
         GrpcSigV4Interceptor interceptor = new GrpcSigV4Interceptor(config, TEST_HOST);
 
         Map<String, List<String>> headers = interceptor.signRequest(
-            "opensearch.DocumentService/Bulk", new byte[0]
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
         );
 
         String authHeader = getHeaderValue(headers, "Authorization", "authorization");
@@ -168,14 +168,14 @@ public class GrpcSigV4InterceptorTest {
         GrpcSigV4Interceptor interceptor = createInterceptor(false);
 
         Map<String, List<String>> headers1 = interceptor.signRequest(
-            "opensearch.DocumentService/Bulk", new byte[0]
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
         );
 
         // Small delay to get a different timestamp
         Thread.sleep(1100);
 
         Map<String, List<String>> headers2 = interceptor.signRequest(
-            "opensearch.DocumentService/Bulk", new byte[0]
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
         );
 
         String date1 = getHeaderValue(headers1, "X-Amz-Date", "x-amz-date");
@@ -193,7 +193,7 @@ public class GrpcSigV4InterceptorTest {
 
         // The signing URL should include the gRPC method path
         Map<String, List<String>> headers = interceptor.signRequest(
-            "opensearch.DocumentService/Bulk", new byte[0]
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
         );
 
         // The host header should match our configured host
@@ -257,6 +257,75 @@ public class GrpcSigV4InterceptorTest {
 
         assertNotNull(transport);
         try { transport.close(); } catch (Exception e) { /* ignore */ }
+    }
+
+    // ─── Payload Hash Tests ──────────────────────────────────────────────────────
+
+    @Test
+    public void testComputePayloadHashEmpty() {
+        String hash = GrpcSigV4Interceptor.computePayloadHash(new byte[0]);
+        // SHA-256 of empty string
+        assertEquals("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hash);
+    }
+
+    @Test
+    public void testComputePayloadHashNull() {
+        String hash = GrpcSigV4Interceptor.computePayloadHash(null);
+        assertEquals("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hash);
+    }
+
+    @Test
+    public void testComputePayloadHashWithData() {
+        byte[] data = "hello world".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String hash = GrpcSigV4Interceptor.computePayloadHash(data);
+        // Known SHA-256 of "hello world"
+        assertEquals("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9", hash);
+    }
+
+    @Test
+    public void testComputePayloadHashDeterministic() {
+        byte[] data = "test data".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String hash1 = GrpcSigV4Interceptor.computePayloadHash(data);
+        String hash2 = GrpcSigV4Interceptor.computePayloadHash(data);
+        assertEquals(hash1, hash2);
+    }
+
+    @Test
+    public void testUnsignedPayloadConstant() {
+        assertEquals("UNSIGNED-PAYLOAD", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD);
+    }
+
+    @Test
+    public void testSignWithPayloadHash() {
+        GrpcSigV4Interceptor interceptor = createInterceptor(false);
+
+        // Sign with a pre-computed payload hash
+        String payloadHash = GrpcSigV4Interceptor.computePayloadHash("bulk body".getBytes());
+        Map<String, List<String>> headers = interceptor.signRequest(
+            "opensearch.DocumentService/Bulk", payloadHash
+        );
+
+        // Should still produce valid Authorization header
+        String authHeader = getHeaderValue(headers, "Authorization", "authorization");
+        assertNotNull(authHeader);
+        assertTrue(authHeader.startsWith("AWS4-HMAC-SHA256"));
+    }
+
+    @Test
+    public void testSignWithUnsignedPayload() {
+        GrpcSigV4Interceptor interceptor = createInterceptor(false);
+
+        Map<String, List<String>> headers = interceptor.signRequest(
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
+        );
+
+        // Should still produce valid Authorization header
+        String authHeader = getHeaderValue(headers, "Authorization", "authorization");
+        assertNotNull(authHeader);
+        assertTrue(authHeader.startsWith("AWS4-HMAC-SHA256"));
+        // The x-amz-content-sha256 should be present (set by us before signing)
+        String contentSha = getHeaderValue(headers, "x-amz-content-sha256", "X-Amz-Content-Sha256");
+        assertNotNull("x-amz-content-sha256 should be present", contentSha);
     }
 
     // ─── Helper ──────────────────────────────────────────────────────────────────

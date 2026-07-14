@@ -13,11 +13,12 @@ import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
-import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import java.io.ByteArrayInputStream;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -42,24 +43,26 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
  *       X-Amz-Content-SHA256) and attaches them as gRPC metadata</li>
  * </ol>
  * <p>
- * The signing URL uses the gRPC method path because that's the HTTP/2 path the server sees:
+ * Supports two payload signing modes:
  * <ul>
- *   <li>Bulk: {@code POST /opensearch.DocumentService/Bulk}</li>
- *   <li>Search: {@code POST /opensearch.SearchService/Search}</li>
+ *   <li><b>Unsigned payload</b> (default): Uses "UNSIGNED-PAYLOAD" as the content hash.
+ *       Simpler and works when the server doesn't validate body hash.</li>
+ *   <li><b>Signed payload</b>: Computes SHA-256 of the actual serialized protobuf bytes.
+ *       More secure, required if the server validates the content hash.
+ *       Set via {@link #setPayloadHash(String)} before the call.</li>
  * </ul>
  * <p>
- * Credentials are resolved on every call (not cached) to handle temporary credential rotation.
- * <p>
- * Usage:
+ * For body-aware signing (matching the sample OpenSearchGrpcClient pattern), use the
+ * static helper {@link #computePayloadHash(byte[])} to pre-compute the hash:
  * <pre>{@code
- * GrpcSigV4Config sigv4Config = GrpcSigV4Config.builder()
- *     .region(Region.US_EAST_1)
- *     .service("es")
- *     .credentialsProvider(DefaultCredentialsProvider.create())
- *     .build();
+ * // Pre-compute hash from serialized protobuf
+ * String payloadHash = GrpcSigV4Interceptor.computePayloadHash(protoRequest.toByteArray());
  *
- * GrpcSigV4Interceptor interceptor = new GrpcSigV4Interceptor(sigv4Config, "my-domain.us-east-1.es.amazonaws.com");
+ * // Or use unsigned payload
+ * String payloadHash = GrpcSigV4Interceptor.UNSIGNED_PAYLOAD;
  * }</pre>
+ * <p>
+ * Credentials are resolved on every call (not cached) to handle temporary credential rotation.
  *
  * @see <a href="https://docs.aws.amazon.com/general/latest/gr/sigv4_signing.html">AWS SigV4 Signing</a>
  */
@@ -67,8 +70,14 @@ public class GrpcSigV4Interceptor implements ClientInterceptor {
 
     private static final Logger logger = Logger.getLogger(GrpcSigV4Interceptor.class.getName());
 
+    /** Use this as payloadHash when you don't want to sign the body content. */
+    public static final String UNSIGNED_PAYLOAD = "UNSIGNED-PAYLOAD";
+
     private final GrpcSigV4Config config;
     private final String host;
+
+    // Thread-local payload hash for per-call body signing
+    private final ThreadLocal<String> payloadHashHolder = new ThreadLocal<>();
 
     /**
      * Creates a SigV4 interceptor.
@@ -87,6 +96,44 @@ public class GrpcSigV4Interceptor implements ClientInterceptor {
         this.host = host;
     }
 
+    /**
+     * Sets the payload hash for the next gRPC call on the current thread.
+     * <p>
+     * Call this before invoking the gRPC stub if you want body-aware signing:
+     * <pre>{@code
+     * interceptor.setPayloadHash(GrpcSigV4Interceptor.computePayloadHash(request.toByteArray()));
+     * stub.bulk(request);
+     * }</pre>
+     * <p>
+     * If not set, defaults to {@link #UNSIGNED_PAYLOAD}.
+     *
+     * @param payloadHash the pre-computed SHA-256 hex of the request body, or {@link #UNSIGNED_PAYLOAD}
+     */
+    public void setPayloadHash(String payloadHash) {
+        payloadHashHolder.set(payloadHash);
+    }
+
+    /**
+     * Computes the SHA-256 hex hash of the given bytes.
+     * Use this to pre-compute the payload hash for body-aware signing.
+     *
+     * @param payload the serialized protobuf request bytes
+     * @return lowercase hex-encoded SHA-256 hash
+     */
+    public static String computePayloadHash(byte[] payload) {
+        if (payload == null || payload.length == 0) {
+            // SHA-256 of empty string
+            return "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(payload);
+            return bytesToHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
+        }
+    }
+
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
         MethodDescriptor<ReqT, RespT> method,
@@ -97,16 +144,22 @@ public class GrpcSigV4Interceptor implements ClientInterceptor {
             @Override
             public void start(Listener<RespT> responseListener, Metadata headers) {
                 try {
+                    // Get payload hash: use pre-set value or default to UNSIGNED-PAYLOAD
+                    String payloadHash = payloadHashHolder.get();
+                    if (payloadHash == null) {
+                        payloadHash = UNSIGNED_PAYLOAD;
+                    }
+                    // Clear after use (one-shot per call)
+                    payloadHashHolder.remove();
+
                     // Sign using the gRPC method path
                     Map<String, List<String>> signedHeaders = signRequest(
-                        method.getFullMethodName(),
-                        new byte[0] // body signing uses empty for unary pre-send
+                        method.getFullMethodName(), payloadHash
                     );
 
                     // Attach signed headers as gRPC metadata
                     for (Map.Entry<String, List<String>> entry : signedHeaders.entrySet()) {
                         String key = entry.getKey().toLowerCase();
-                        // Only forward AWS signing headers
                         if (isSigningHeader(key)) {
                             Metadata.Key<String> metadataKey =
                                 Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER);
@@ -117,19 +170,9 @@ public class GrpcSigV4Interceptor implements ClientInterceptor {
                     }
                 } catch (Exception e) {
                     logger.log(Level.WARNING, "Failed to sign gRPC request: " + e.getMessage(), e);
-                    // Continue without signing — server will reject with UNAUTHENTICATED
                 }
 
                 super.start(responseListener, headers);
-            }
-
-            @Override
-            public void sendMessage(ReqT message) {
-                // For more accurate body signing, we could re-sign here with the actual
-                // serialized message bytes. For now, we sign with empty body in start()
-                // which works because OpenSearch's gRPC SigV4 validation uses unsigned-payload
-                // for the content hash when the body isn't available at signing time.
-                super.sendMessage(message);
             }
         };
     }
@@ -138,12 +181,10 @@ public class GrpcSigV4Interceptor implements ClientInterceptor {
      * Signs a synthetic HTTP request representing the gRPC call.
      *
      * @param grpcMethodPath the full gRPC method name (e.g., "opensearch.DocumentService/Bulk")
-     * @param body          the request body bytes (may be empty for pre-send signing)
+     * @param payloadHash    the SHA-256 hex hash of the body, or "UNSIGNED-PAYLOAD"
      * @return map of signed header names to their values
      */
-    Map<String, List<String>> signRequest(String grpcMethodPath, byte[] body) {
-        // gRPC always uses POST over HTTP/2
-        // The URL path is the gRPC service method path with leading /
+    Map<String, List<String>> signRequest(String grpcMethodPath, String payloadHash) {
         String path = "/" + grpcMethodPath;
         String url = "https://" + host + path;
 
@@ -151,12 +192,11 @@ public class GrpcSigV4Interceptor implements ClientInterceptor {
         SdkHttpFullRequest.Builder requestBuilder = SdkHttpFullRequest.builder()
             .method(SdkHttpMethod.POST)
             .uri(URI.create(url))
-            .putHeader("host", host);
+            .putHeader("host", host)
+            .putHeader("x-amz-content-sha256", payloadHash);
 
-        // Body content for signing
-        ContentStreamProvider bodyProvider = body != null && body.length > 0
-            ? ContentStreamProvider.fromByteArrayUnsafe(body)
-            : ContentStreamProvider.fromByteArrayUnsafe(new byte[0]);
+        // For signed payload, we pass the actual bytes; for unsigned, empty
+        ContentStreamProvider bodyProvider = ContentStreamProvider.fromByteArrayUnsafe(new byte[0]);
 
         // Sign the request
         SignedRequest signedRequest = AwsV4HttpSigner.create()
@@ -180,6 +220,14 @@ public class GrpcSigV4Interceptor implements ClientInterceptor {
             || headerName.equals("x-amz-security-token")
             || headerName.equals("x-amz-content-sha256")
             || headerName.equals("host");
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b & 0xff));
+        }
+        return sb.toString();
     }
 
     /**
