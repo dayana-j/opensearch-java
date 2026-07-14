@@ -9,7 +9,6 @@
 package org.opensearch.client.transport.grpc;
 
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
@@ -221,6 +220,10 @@ public class GrpcTransport implements OpenSearchTransport {
         private JsonpMapper jsonpMapper;
         private GrpcTransportOptions grpcOptions = GrpcTransportOptions.defaults();
         private TransportOptions transportOptions;
+        private GrpcTlsConfig tlsConfig;
+        private String basicAuthUsername;
+        private String basicAuthPassword;
+        private final java.util.List<io.grpc.ClientInterceptor> interceptors = new java.util.ArrayList<>();
         private ManagedChannel channel; // allow injecting channel for testing
 
         Builder(String host, int port) {
@@ -244,7 +247,59 @@ public class GrpcTransport implements OpenSearchTransport {
         }
 
         /**
+         * Configures TLS for the gRPC channel.
+         * <p>
+         * Example:
+         * <pre>{@code
+         * .tls(GrpcTlsConfig.builder()
+         *     .trustCertificatePath("/path/to/ca.pem")
+         *     .build())
+         * }</pre>
+         *
+         * @param tlsConfig the TLS configuration
+         */
+        public Builder tls(GrpcTlsConfig tlsConfig) {
+            this.tlsConfig = tlsConfig;
+            return this;
+        }
+
+        /**
+         * Enables TLS with insecure trust (trust all certificates).
+         * Convenience method for development/testing.
+         */
+        public Builder tlsInsecure() {
+            this.tlsConfig = GrpcTlsConfig.insecure();
+            return this;
+        }
+
+        /**
+         * Configures basic authentication credentials.
+         * Adds a {@link BasicAuthInterceptor} that attaches
+         * {@code Authorization: Basic <base64>} to every gRPC call.
+         *
+         * @param username the username
+         * @param password the password
+         */
+        public Builder basicAuth(String username, String password) {
+            this.basicAuthUsername = username;
+            this.basicAuthPassword = password;
+            return this;
+        }
+
+        /**
+         * Adds a custom client interceptor to the gRPC channel.
+         * Interceptors are applied in the order they are added.
+         *
+         * @param interceptor the gRPC client interceptor
+         */
+        public Builder addInterceptor(io.grpc.ClientInterceptor interceptor) {
+            this.interceptors.add(interceptor);
+            return this;
+        }
+
+        /**
          * Inject a pre-built channel (primarily for testing).
+         * When set, TLS config and interceptors are ignored.
          */
         public Builder channel(ManagedChannel channel) {
             this.channel = channel;
@@ -258,25 +313,25 @@ public class GrpcTransport implements OpenSearchTransport {
 
             ManagedChannel ch = this.channel;
             if (ch == null) {
-                ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder
-                    .forAddress(host, port)
-                    .usePlaintext(); // TLS configured in tls-basic-auth branch
+                // Build interceptor list
+                java.util.List<io.grpc.ClientInterceptor> allInterceptors = new java.util.ArrayList<>();
 
-                if (grpcOptions.maxInboundMessageSize() > 0) {
-                    channelBuilder.maxInboundMessageSize(grpcOptions.maxInboundMessageSize());
-                }
-                if (grpcOptions.keepAliveTimeMs() > 0) {
-                    channelBuilder.keepAliveTime(grpcOptions.keepAliveTimeMs(), TimeUnit.MILLISECONDS);
-                }
-                if (grpcOptions.keepAliveTimeoutMs() > 0) {
-                    channelBuilder.keepAliveTimeout(grpcOptions.keepAliveTimeoutMs(), TimeUnit.MILLISECONDS);
-                }
-                channelBuilder.keepAliveWithoutCalls(grpcOptions.keepAliveWithoutCalls());
-                if (grpcOptions.idleTimeoutMs() > 0) {
-                    channelBuilder.idleTimeout(grpcOptions.idleTimeoutMs(), TimeUnit.MILLISECONDS);
+                // Basic auth interceptor goes first (applied to every call)
+                if (basicAuthUsername != null && basicAuthPassword != null) {
+                    allInterceptors.add(new BasicAuthInterceptor(basicAuthUsername, basicAuthPassword));
                 }
 
-                ch = channelBuilder.build();
+                // Add any custom interceptors
+                allInterceptors.addAll(this.interceptors);
+
+                // Create channel via factory
+                try {
+                    ch = GrpcChannelFactory.createChannel(
+                        host, port, tlsConfig, grpcOptions, allInterceptors
+                    );
+                } catch (java.io.IOException e) {
+                    throw new IllegalStateException("Failed to create gRPC channel: " + e.getMessage(), e);
+                }
             }
 
             return new GrpcTransport(ch, jsonpMapper, grpcOptions, transportOptions);
