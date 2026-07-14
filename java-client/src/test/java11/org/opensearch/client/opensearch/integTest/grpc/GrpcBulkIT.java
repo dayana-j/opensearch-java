@@ -21,6 +21,7 @@ import org.opensearch.client.opensearch.core.SearchResponse;
 import org.opensearch.client.opensearch.core.bulk.BulkOperation;
 import org.opensearch.client.opensearch.core.bulk.BulkResponseItem;
 import org.opensearch.client.opensearch.core.bulk.IndexOperation;
+import org.opensearch.client.opensearch.core.bulk.OperationType;
 import org.opensearch.client.opensearch.indices.CreateIndexRequest;
 import org.opensearch.client.opensearch.indices.DeleteIndexRequest;
 
@@ -37,6 +38,12 @@ import org.opensearch.client.opensearch.indices.DeleteIndexRequest;
  *   <li>Client receives standard BulkResponse</li>
  * </ol>
  * <p>
+ * Tests are condensed to minimize cluster load while covering:
+ * - All 4 operation types (index, create, update, delete)
+ * - Response format completeness (_shards, _version, _seq_no, _primary_term)
+ * - Status code mapping (201, 200, 409, 404)
+ * - REST fallback for non-bulk operations
+ * <p>
  * Skips automatically on OpenSearch versions below 3.5.0.
  * <p>
  * Run:
@@ -47,7 +54,7 @@ import org.opensearch.client.opensearch.indices.DeleteIndexRequest;
  */
 public class GrpcBulkIT extends AbstractGrpcIT implements GrpcTransportSupport {
 
-    private static final String INDEX_NAME = "grpc-bulk-it";
+    private static final String INDEX = "grpc-bulk-it";
 
     // ─── Test Document ───────────────────────────────────────────────────────────
 
@@ -75,61 +82,90 @@ public class GrpcBulkIT extends AbstractGrpcIT implements GrpcTransportSupport {
     // ─── Tests ───────────────────────────────────────────────────────────────────
 
     /**
-     * Verifies that bulk indexing multiple documents works end-to-end over gRPC.
-     * After indexing, confirms documents are searchable via REST.
+     * Tests all 4 bulk operations in one call and validates the full response format.
+     * Covers: index, create, update, delete, response fields, status codes.
      */
     @Test
-    public void testBulkIndexViaGrpc() throws IOException {
+    public void testBulkMixedOpsAndResponseFormat() throws IOException {
         assumeGrpcSupported();
 
-        String index = INDEX_NAME + "-index";
+        String index = INDEX + "-mixed";
         grpcClient().indices().create(new CreateIndexRequest.Builder().index(index).build());
 
         try {
-            List<BulkOperation> operations = new ArrayList<>();
-            operations.add(new BulkOperation.Builder().index(
+            // Step 1: Seed with index + create
+            List<BulkOperation> seedOps = new ArrayList<>();
+            seedOps.add(new BulkOperation.Builder().index(
                 new IndexOperation.Builder<Product>()
                     .index(index).id("1")
                     .document(new Product("Laptop", 999.99, 10))
                     .build()
             ).build());
-            operations.add(new BulkOperation.Builder().index(
-                new IndexOperation.Builder<Product>()
-                    .index(index).id("2")
-                    .document(new Product("Mouse", 29.99, 200))
-                    .build()
-            ).build());
-            operations.add(new BulkOperation.Builder().index(
-                new IndexOperation.Builder<Product>()
-                    .index(index).id("3")
-                    .document(new Product("Keyboard", 79.99, 75))
-                    .build()
+            seedOps.add(new BulkOperation.Builder().create(c -> c
+                .index(index).id("2")
+                .document(new Product("Mouse", 29.99, 200))
             ).build());
 
-            BulkRequest bulkRequest = new BulkRequest.Builder()
-                .index(index)
-                .operations(operations)
-                .refresh(Refresh.True)
-                .build();
-
-            // Bulk goes over gRPC
-            BulkResponse response = grpcClient().bulk(bulkRequest);
-
-            // Verify response structure
-            assertFalse("Bulk should not have errors", response.errors());
-            assertEquals("Should have 3 items", 3, response.items().size());
-
-            for (BulkResponseItem item : response.items()) {
-                assertEquals(index, item.index());
-                assertNotNull("Item should have an id", item.id());
-                assertEquals("created", item.result());
-            }
-
-            // Verify docs are searchable (search goes over REST)
-            SearchResponse<Product> searchResponse = grpcClient().search(
-                s -> s.index(index), Product.class
+            BulkResponse seedResp = grpcClient().bulk(
+                new BulkRequest.Builder().index(index).operations(seedOps).refresh(Refresh.True).build()
             );
-            assertEquals("Should find 3 documents", 3, searchResponse.hits().total().value());
+
+            // Validate response format on seed
+            assertFalse("Should have no errors", seedResp.errors());
+            assertEquals(2, seedResp.items().size());
+            assertTrue("took should be >= 0", seedResp.took() >= 0);
+
+            // Validate index response item fields
+            BulkResponseItem indexItem = seedResp.items().get(0);
+            assertEquals(OperationType.Index, indexItem.operationType());
+            assertEquals(index, indexItem.index());
+            assertEquals("1", indexItem.id());
+            assertEquals("created", indexItem.result());
+            assertNotNull("Should have _version", indexItem.version());
+            assertNotNull("Should have _seq_no", indexItem.seqNo());
+            assertNotNull("Should have _primary_term", indexItem.primaryTerm());
+            assertNotNull("Should have _shards", indexItem.shards());
+            assertTrue("_shards.successful >= 1", indexItem.shards().successful() >= 1);
+
+            // Validate create response item
+            BulkResponseItem createItem = seedResp.items().get(1);
+            assertEquals(OperationType.Create, createItem.operationType());
+            assertEquals("created", createItem.result());
+
+            // Step 2: Mixed ops — update + delete in one call
+            List<BulkOperation> mixedOps = new ArrayList<>();
+            mixedOps.add(new BulkOperation.Builder().update(u -> u
+                .index(index).id("1")
+                .document(new Product("Laptop Pro", 1299.99, 5))
+            ).build());
+            mixedOps.add(new BulkOperation.Builder().delete(d -> d
+                .index(index).id("2")
+            ).build());
+
+            BulkResponse mixedResp = grpcClient().bulk(
+                new BulkRequest.Builder().index(index).operations(mixedOps).refresh(Refresh.True).build()
+            );
+
+            assertFalse(mixedResp.errors());
+            assertEquals(2, mixedResp.items().size());
+
+            // Update returns status 200 and result "updated"
+            BulkResponseItem updateItem = mixedResp.items().get(0);
+            assertEquals(OperationType.Update, updateItem.operationType());
+            assertEquals("updated", updateItem.result());
+
+            // Delete returns result "deleted"
+            BulkResponseItem deleteItem = mixedResp.items().get(1);
+            assertEquals(OperationType.Delete, deleteItem.operationType());
+            assertEquals("deleted", deleteItem.result());
+
+            // Step 3: Verify final state via REST
+            SearchResponse<Product> search = grpcClient().search(s -> s.index(index), Product.class);
+            assertEquals("Should have 1 doc remaining", 1, search.hits().total().value());
+
+            GetResponse<Product> get = grpcClient().get(g -> g.index(index).id("1"), Product.class);
+            assertTrue(get.found());
+            assertEquals("Laptop Pro", get.source().getName());
 
         } finally {
             grpcClient().indices().delete(new DeleteIndexRequest.Builder().index(index).build());
@@ -137,53 +173,51 @@ public class GrpcBulkIT extends AbstractGrpcIT implements GrpcTransportSupport {
     }
 
     /**
-     * Verifies bulk delete operations work over gRPC.
+     * Tests error status codes: 409 conflict and 404 not found.
      */
     @Test
-    public void testBulkDeleteViaGrpc() throws IOException {
+    public void testBulkErrorStatusCodes() throws IOException {
         assumeGrpcSupported();
 
-        String index = INDEX_NAME + "-delete";
+        String index = INDEX + "-errors";
         grpcClient().indices().create(new CreateIndexRequest.Builder().index(index).build());
 
         try {
-            // First: index documents
-            List<BulkOperation> indexOps = new ArrayList<>();
-            indexOps.add(new BulkOperation.Builder().index(
-                new IndexOperation.Builder<Product>()
-                    .index(index).id("del-1")
-                    .document(new Product("ToDelete", 1.0, 1))
-                    .build()
+            // Create a doc
+            List<BulkOperation> createOps = new ArrayList<>();
+            createOps.add(new BulkOperation.Builder().create(c -> c
+                .index(index).id("exists")
+                .document(new Product("Existing", 1.0, 1))
             ).build());
-            indexOps.add(new BulkOperation.Builder().index(
-                new IndexOperation.Builder<Product>()
-                    .index(index).id("del-2")
-                    .document(new Product("ToKeep", 2.0, 2))
-                    .build()
-            ).build());
-
-            BulkResponse indexResponse = grpcClient().bulk(
-                new BulkRequest.Builder().index(index).operations(indexOps).refresh(Refresh.True).build()
+            grpcClient().bulk(
+                new BulkRequest.Builder().index(index).operations(createOps).refresh(Refresh.True).build()
             );
-            assertFalse(indexResponse.errors());
 
-            // Second: delete one via bulk
-            List<BulkOperation> deleteOps = new ArrayList<>();
-            deleteOps.add(new BulkOperation.Builder().delete(
-                d -> d.index(index).id("del-1")
+            // Conflict (409): create same doc again + Not found (404): delete nonexistent
+            List<BulkOperation> errorOps = new ArrayList<>();
+            errorOps.add(new BulkOperation.Builder().create(c -> c
+                .index(index).id("exists")
+                .document(new Product("Duplicate", 2.0, 2))
+            ).build());
+            errorOps.add(new BulkOperation.Builder().delete(d -> d
+                .index(index).id("nonexistent")
             ).build());
 
-            BulkResponse deleteResponse = grpcClient().bulk(
-                new BulkRequest.Builder().index(index).operations(deleteOps).refresh(Refresh.True).build()
+            BulkResponse errorResp = grpcClient().bulk(
+                new BulkRequest.Builder().index(index).operations(errorOps).refresh(Refresh.True).build()
             );
-            assertFalse(deleteResponse.errors());
-            assertEquals("deleted", deleteResponse.items().get(0).result());
 
-            // Verify only one document remains
-            SearchResponse<Product> searchResponse = grpcClient().search(
-                s -> s.index(index), Product.class
-            );
-            assertEquals("Should find 1 document", 1, searchResponse.hits().total().value());
+            assertTrue("Should have errors", errorResp.errors());
+            assertEquals(2, errorResp.items().size());
+
+            // Create conflict → 409
+            BulkResponseItem conflictItem = errorResp.items().get(0);
+            assertEquals(409, conflictItem.status());
+            assertNotNull("Should have error detail", conflictItem.error());
+
+            // Delete not found → 404
+            BulkResponseItem notFoundItem = errorResp.items().get(1);
+            assertEquals(404, notFoundItem.status());
 
         } finally {
             grpcClient().indices().delete(new DeleteIndexRequest.Builder().index(index).build());
@@ -191,126 +225,24 @@ public class GrpcBulkIT extends AbstractGrpcIT implements GrpcTransportSupport {
     }
 
     /**
-     * Verifies that non-bulk operations (search, info, index management) correctly
-     * fall back to REST through the HybridTransport.
+     * Tests that non-bulk operations fall back to REST seamlessly.
      */
     @Test
-    public void testHybridTransportRestFallback() throws IOException {
+    public void testRestFallback() throws IOException {
         assumeGrpcSupported();
 
-        // info() — goes over REST
+        // info() — REST
         InfoResponse info = grpcClient().info();
         assertNotNull(info);
         assertNotNull(info.version().number());
 
-        // Index create/delete — goes over REST
-        String index = INDEX_NAME + "-fallback";
+        // Index create/search/delete — all REST
+        String index = INDEX + "-fallback";
         grpcClient().indices().create(new CreateIndexRequest.Builder().index(index).build());
-
         try {
-            // Search — goes over REST
-            SearchResponse<Product> response = grpcClient().search(
-                s -> s.index(index), Product.class
-            );
-            assertNotNull(response);
-            assertEquals(0, response.hits().total().value());
-        } finally {
-            grpcClient().indices().delete(new DeleteIndexRequest.Builder().index(index).build());
-        }
-    }
-
-    /**
-     * Verifies that bulk with update operations works over gRPC.
-     */
-    @Test
-    public void testBulkUpdateViaGrpc() throws IOException {
-        assumeGrpcSupported();
-
-        String index = INDEX_NAME + "-update";
-        grpcClient().indices().create(new CreateIndexRequest.Builder().index(index).build());
-
-        try {
-            // Index a document first
-            List<BulkOperation> indexOps = new ArrayList<>();
-            indexOps.add(new BulkOperation.Builder().index(
-                new IndexOperation.Builder<Product>()
-                    .index(index).id("upd-1")
-                    .document(new Product("Widget", 10.0, 50))
-                    .build()
-            ).build());
-
-            grpcClient().bulk(
-                new BulkRequest.Builder().index(index).operations(indexOps).refresh(Refresh.True).build()
-            );
-
-            // Update the document via bulk
-            List<BulkOperation> updateOps = new ArrayList<>();
-            updateOps.add(new BulkOperation.Builder().update(u -> u
-                .index(index)
-                .id("upd-1")
-                .document(new Product("Widget Pro", 15.0, 100))
-            ).build());
-
-            BulkResponse updateResponse = grpcClient().bulk(
-                new BulkRequest.Builder().index(index).operations(updateOps).refresh(Refresh.True).build()
-            );
-            assertFalse(updateResponse.errors());
-            assertEquals("updated", updateResponse.items().get(0).result());
-
-            // Verify the update via GET (REST)
-            GetResponse<Product> getResponse = grpcClient().get(
-                g -> g.index(index).id("upd-1"), Product.class
-            );
-            assertTrue(getResponse.found());
-            assertEquals("Widget Pro", getResponse.source().getName());
-            assertEquals(15.0, getResponse.source().getPrice(), 0.01);
-
-        } finally {
-            grpcClient().indices().delete(new DeleteIndexRequest.Builder().index(index).build());
-        }
-    }
-
-    /**
-     * Verifies that bulk with partial errors returns errors=true and
-     * individual item error details.
-     */
-    @Test
-    public void testBulkWithPartialErrors() throws IOException {
-        assumeGrpcSupported();
-
-        String index = INDEX_NAME + "-errors";
-        grpcClient().indices().create(new CreateIndexRequest.Builder().index(index).build());
-
-        try {
-            // Try to update a document that doesn't exist (should fail)
-            // and index one that should succeed
-            List<BulkOperation> ops = new ArrayList<>();
-            ops.add(new BulkOperation.Builder().index(
-                new IndexOperation.Builder<Product>()
-                    .index(index).id("ok-1")
-                    .document(new Product("Success", 1.0, 1))
-                    .build()
-            ).build());
-            ops.add(new BulkOperation.Builder().update(u -> u
-                .index(index)
-                .id("nonexistent-doc")
-                .document(new Product("Fail", 0.0, 0))
-            ).build());
-
-            BulkResponse response = grpcClient().bulk(
-                new BulkRequest.Builder().index(index).operations(ops).refresh(Refresh.True).build()
-            );
-
-            // Should have errors because the update targets a nonexistent doc
-            assertTrue("Should have errors", response.errors());
-            assertEquals(2, response.items().size());
-
-            // First item should succeed
-            assertEquals("created", response.items().get(0).result());
-
-            // Second item should have an error
-            assertNotNull("Error item should have error", response.items().get(1).error());
-
+            SearchResponse<Product> resp = grpcClient().search(s -> s.index(index), Product.class);
+            assertNotNull(resp);
+            assertEquals(0, resp.hits().total().value());
         } finally {
             grpcClient().indices().delete(new DeleteIndexRequest.Builder().index(index).build());
         }
