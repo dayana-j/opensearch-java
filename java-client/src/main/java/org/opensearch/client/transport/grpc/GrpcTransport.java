@@ -51,14 +51,17 @@ public class GrpcTransport implements OpenSearchTransport {
     private final GrpcTransportOptions grpcOptions;
     private final TransportOptions transportOptions;
     private final GrpcChannelHealthMonitor healthMonitor;
+    private final GrpcSigV4Interceptor sigV4Interceptor; // nullable — for body-aware signing
 
     GrpcTransport(ManagedChannel channel, JsonpMapper jsonpMapper,
-                  GrpcTransportOptions grpcOptions, @Nullable TransportOptions transportOptions) {
+                  GrpcTransportOptions grpcOptions, @Nullable TransportOptions transportOptions,
+                  @Nullable GrpcSigV4Interceptor sigV4Interceptor) {
         this.channel = channel;
         this.documentStub = channel != null ? DocumentServiceGrpc.newBlockingStub(channel) : null;
         this.jsonpMapper = jsonpMapper;
         this.grpcOptions = grpcOptions;
         this.transportOptions = transportOptions;
+        this.sigV4Interceptor = sigV4Interceptor;
         this.healthMonitor = channel != null ? new GrpcChannelHealthMonitor(channel) : null;
 
         // Start monitoring channel health and warm up the connection
@@ -173,6 +176,12 @@ public class GrpcTransport implements OpenSearchTransport {
     private BulkResponse performBulk(BulkRequest request) throws TransportException {
         // Convert client request to protobuf
         org.opensearch.protobufs.BulkRequest protoRequest = BulkRequestConverter.toProto(request, jsonpMapper);
+
+        // Pre-compute payload hash for body-aware SigV4 signing
+        if (sigV4Interceptor != null) {
+            String payloadHash = GrpcSigV4Interceptor.computePayloadHash(protoRequest.toByteArray());
+            sigV4Interceptor.setPayloadHash(payloadHash);
+        }
 
         // Execute with retry logic
         int attempt = 0;
@@ -336,6 +345,7 @@ public class GrpcTransport implements OpenSearchTransport {
             }
 
             ManagedChannel ch = this.channel;
+            GrpcSigV4Interceptor sigV4InterceptorRef = null;
             if (ch == null) {
                 // Build interceptor list
                 java.util.List<io.grpc.ClientInterceptor> allInterceptors = new java.util.ArrayList<>();
@@ -353,7 +363,8 @@ public class GrpcTransport implements OpenSearchTransport {
                                 + "Configure TLS with .tls() or .tlsInsecure() before .sigV4()."
                         );
                     }
-                    allInterceptors.add(new GrpcSigV4Interceptor(sigV4Config, host));
+                    sigV4InterceptorRef = new GrpcSigV4Interceptor(sigV4Config, host);
+                    allInterceptors.add(sigV4InterceptorRef);
                 }
 
                 // Add any custom interceptors
@@ -369,7 +380,7 @@ public class GrpcTransport implements OpenSearchTransport {
                 }
             }
 
-            return new GrpcTransport(ch, jsonpMapper, grpcOptions, transportOptions);
+            return new GrpcTransport(ch, jsonpMapper, grpcOptions, transportOptions, sigV4InterceptorRef);
         }
     }
 }
