@@ -223,6 +223,7 @@ public class GrpcTransport implements OpenSearchTransport {
         private GrpcTlsConfig tlsConfig;
         private String basicAuthUsername;
         private String basicAuthPassword;
+        private GrpcSigV4Config sigV4Config;
         private final java.util.List<io.grpc.ClientInterceptor> interceptors = new java.util.ArrayList<>();
         private ManagedChannel channel; // allow injecting channel for testing
 
@@ -298,6 +299,29 @@ public class GrpcTransport implements OpenSearchTransport {
         }
 
         /**
+         * Configures AWS SigV4 signing for the gRPC channel.
+         * <p>
+         * Every gRPC call will be signed using the provided AWS credentials and region.
+         * TLS is required when using SigV4 — if no TLS config is set, insecure TLS
+         * will NOT be used automatically. You must explicitly configure TLS.
+         * <p>
+         * Example:
+         * <pre>{@code
+         * .tls(GrpcTlsConfig.builder().build())  // use system trust store
+         * .sigV4(GrpcSigV4Config.builder()
+         *     .region(Region.US_EAST_1)
+         *     .service("es")
+         *     .build())
+         * }</pre>
+         *
+         * @param sigV4Config the SigV4 configuration
+         */
+        public Builder sigV4(GrpcSigV4Config sigV4Config) {
+            this.sigV4Config = sigV4Config;
+            return this;
+        }
+
+        /**
          * Inject a pre-built channel (primarily for testing).
          * When set, TLS config and interceptors are ignored.
          */
@@ -319,6 +343,17 @@ public class GrpcTransport implements OpenSearchTransport {
                 // Basic auth interceptor goes first (applied to every call)
                 if (basicAuthUsername != null && basicAuthPassword != null) {
                     allInterceptors.add(new BasicAuthInterceptor(basicAuthUsername, basicAuthPassword));
+                }
+
+                // SigV4 interceptor (mutually exclusive with basic auth in practice)
+                if (sigV4Config != null) {
+                    if (tlsConfig == null) {
+                        throw new IllegalStateException(
+                            "TLS is required when using SigV4 signing. "
+                                + "Configure TLS with .tls() or .tlsInsecure() before .sigV4()."
+                        );
+                    }
+                    allInterceptors.add(new GrpcSigV4Interceptor(sigV4Config, host));
                 }
 
                 // Add any custom interceptors
