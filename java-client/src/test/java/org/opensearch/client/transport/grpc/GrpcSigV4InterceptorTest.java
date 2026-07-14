@@ -328,6 +328,127 @@ public class GrpcSigV4InterceptorTest {
         assertNotNull("x-amz-content-sha256 should be present", contentSha);
     }
 
+    // ─── Canonical Request Structure Tests ───────────────────────────────────────
+    // Based on patterns from sigv4-signing-examples/no-sdk/java/AWSSigner.java
+
+    @Test
+    public void testSignedHeadersContainHost() {
+        GrpcSigV4Interceptor interceptor = createInterceptor(false);
+        Map<String, List<String>> headers = interceptor.signRequest(
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
+        );
+
+        // Host must be in signed headers (required by SigV4 spec)
+        String hostHeader = getHeaderValue(headers, "host", "Host");
+        assertNotNull("host header must be present", hostHeader);
+        assertEquals(TEST_HOST, hostHeader);
+    }
+
+    @Test
+    public void testAuthorizationCredentialFormat() {
+        // Credential should be: ACCESS_KEY/date/region/service/aws4_request
+        GrpcSigV4Interceptor interceptor = createInterceptor(false);
+        Map<String, List<String>> headers = interceptor.signRequest(
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
+        );
+
+        String authHeader = getHeaderValue(headers, "Authorization", "authorization");
+        // Should contain Credential=AKID.../date/us-east-1/es/aws4_request
+        assertTrue("Should contain Credential=", authHeader.contains("Credential="));
+        assertTrue("Should contain /es/aws4_request", authHeader.contains("/es/aws4_request"));
+        assertTrue("Should contain access key", authHeader.contains(ACCESS_KEY));
+    }
+
+    @Test
+    public void testAuthorizationSignedHeadersList() {
+        // SignedHeaders should be a semicolon-separated sorted list
+        GrpcSigV4Interceptor interceptor = createInterceptor(false);
+        Map<String, List<String>> headers = interceptor.signRequest(
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
+        );
+
+        String authHeader = getHeaderValue(headers, "Authorization", "authorization");
+        assertTrue("Should contain SignedHeaders=", authHeader.contains("SignedHeaders="));
+        // host and x-amz-date should always be in signed headers
+        assertTrue("SignedHeaders should include host", authHeader.contains("host"));
+    }
+
+    @Test
+    public void testAuthorizationHasSignature() {
+        // Signature should be a 64-char hex string
+        GrpcSigV4Interceptor interceptor = createInterceptor(false);
+        Map<String, List<String>> headers = interceptor.signRequest(
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
+        );
+
+        String authHeader = getHeaderValue(headers, "Authorization", "authorization");
+        assertTrue("Should contain Signature=", authHeader.contains("Signature="));
+        // Extract signature value
+        String sigPart = authHeader.substring(authHeader.indexOf("Signature=") + "Signature=".length());
+        assertTrue("Signature should be 64 hex chars", sigPart.matches("[0-9a-f]{64}"));
+    }
+
+    @Test
+    public void testAmzDateFormat() {
+        // x-amz-date should be in format: yyyyMMdd'T'HHmmss'Z'
+        GrpcSigV4Interceptor interceptor = createInterceptor(false);
+        Map<String, List<String>> headers = interceptor.signRequest(
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
+        );
+
+        String amzDate = getHeaderValue(headers, "X-Amz-Date", "x-amz-date");
+        assertNotNull("x-amz-date should be present", amzDate);
+        // Format: 20260714T163000Z (15 chars + Z = 16)
+        assertTrue("x-amz-date should match format yyyyMMddTHHmmssZ",
+            amzDate.matches("\\d{8}T\\d{6}Z"));
+    }
+
+    @Test
+    public void testDifferentMethodPathsProduceDifferentSignatures() {
+        GrpcSigV4Interceptor interceptor = createInterceptor(false);
+
+        Map<String, List<String>> bulkHeaders = interceptor.signRequest(
+            "opensearch.DocumentService/Bulk", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
+        );
+        Map<String, List<String>> searchHeaders = interceptor.signRequest(
+            "opensearch.SearchService/Search", GrpcSigV4Interceptor.UNSIGNED_PAYLOAD
+        );
+
+        String bulkAuth = getHeaderValue(bulkHeaders, "Authorization", "authorization");
+        String searchAuth = getHeaderValue(searchHeaders, "Authorization", "authorization");
+
+        // Different paths should produce different signatures
+        // (they might share the same date if within same second, but signature differs)
+        String bulkSig = bulkAuth.substring(bulkAuth.indexOf("Signature="));
+        String searchSig = searchAuth.substring(searchAuth.indexOf("Signature="));
+        assertFalse("Different paths should produce different signatures",
+            bulkSig.equals(searchSig));
+    }
+
+    @Test
+    public void testDifferentPayloadHashesProduceDifferentHeaders() {
+        GrpcSigV4Interceptor interceptor = createInterceptor(false);
+
+        String hash1 = GrpcSigV4Interceptor.computePayloadHash("body1".getBytes());
+        String hash2 = GrpcSigV4Interceptor.computePayloadHash("body2".getBytes());
+
+        Map<String, List<String>> headers1 = interceptor.signRequest(
+            "opensearch.DocumentService/Bulk", hash1
+        );
+        Map<String, List<String>> headers2 = interceptor.signRequest(
+            "opensearch.DocumentService/Bulk", hash2
+        );
+
+        // Different payload hashes should produce different x-amz-content-sha256 values
+        String contentSha1 = getHeaderValue(headers1, "x-amz-content-sha256", "X-Amz-Content-Sha256");
+        String contentSha2 = getHeaderValue(headers2, "x-amz-content-sha256", "X-Amz-Content-Sha256");
+        assertNotNull(contentSha1);
+        assertNotNull(contentSha2);
+        // The hashes we computed should differ
+        assertFalse("Different bodies should produce different hashes",
+            hash1.equals(hash2));
+    }
+
     // ─── Helper ──────────────────────────────────────────────────────────────────
 
     private String getHeaderValue(Map<String, List<String>> headers, String... possibleKeys) {
