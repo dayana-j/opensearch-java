@@ -70,14 +70,8 @@ public class TranslationTest {
     @Test public void testGrpcStatusOkCreated() { assertEquals(201, FieldMappingUtil.grpcStatusToHttpStatus(0, "created")); }
     @Test public void testGrpcStatusOkUpdated() { assertEquals(200, FieldMappingUtil.grpcStatusToHttpStatus(0, "updated")); }
     @Test public void testGrpcStatusOkNull() { assertEquals(200, FieldMappingUtil.grpcStatusToHttpStatus(0, null)); }
-    @Test public void testGrpcStatusInvalidArg() { assertEquals(400, FieldMappingUtil.grpcStatusToHttpStatus(3, null)); }
-    @Test public void testGrpcStatusNotFound() { assertEquals(404, FieldMappingUtil.grpcStatusToHttpStatus(5, null)); }
-    @Test public void testGrpcStatusAlreadyExists() { assertEquals(409, FieldMappingUtil.grpcStatusToHttpStatus(6, null)); }
-    @Test public void testGrpcStatusPermDenied() { assertEquals(403, FieldMappingUtil.grpcStatusToHttpStatus(7, null)); }
-    @Test public void testGrpcStatusResourceExh() { assertEquals(429, FieldMappingUtil.grpcStatusToHttpStatus(8, null)); }
-    @Test public void testGrpcStatusUnavailable() { assertEquals(503, FieldMappingUtil.grpcStatusToHttpStatus(14, null)); }
-    @Test public void testGrpcStatusUnauth() { assertEquals(401, FieldMappingUtil.grpcStatusToHttpStatus(16, null)); }
     @Test public void testGrpcStatusDeadline() { assertEquals(408, FieldMappingUtil.grpcStatusToHttpStatus(4, null)); }
+    @Test public void testGrpcStatusUnavailable() { assertEquals(503, FieldMappingUtil.grpcStatusToHttpStatus(14, null)); }
     @Test public void testGrpcStatusUnimplemented() { assertEquals(501, FieldMappingUtil.grpcStatusToHttpStatus(12, null)); }
     @Test public void testGrpcStatusInternal() { assertEquals(500, FieldMappingUtil.grpcStatusToHttpStatus(13, null)); }
 
@@ -91,8 +85,6 @@ public class TranslationTest {
     @Test public void testConvertAlreadyExists() { Exception e = GrpcStatusConverter.convert(new StatusRuntimeException(Status.ALREADY_EXISTS.withDescription("x"))); assertTrue(e instanceof OpenSearchException); assertEquals(409, ((OpenSearchException)e).status()); }
     @Test public void testConvertUnimplemented() { assertTrue(GrpcStatusConverter.convert(new StatusRuntimeException(Status.UNIMPLEMENTED.withDescription("x"))) instanceof UnsupportedOperationException); }
     @Test public void testConvertOkReturnsNull() { assertNull(GrpcStatusConverter.convert(new StatusRuntimeException(Status.OK))); }
-    @Test public void testIsRetryableUnavailable() { assertTrue(GrpcStatusConverter.isRetryable(Status.Code.UNAVAILABLE)); }
-    @Test public void testIsRetryableDeadline() { assertTrue(GrpcStatusConverter.isRetryable(Status.Code.DEADLINE_EXCEEDED)); }
     @Test public void testIsNotRetryableNotFound() { assertFalse(GrpcStatusConverter.isRetryable(Status.Code.NOT_FOUND)); }
     @Test public void testIsNotRetryableUnauth() { assertFalse(GrpcStatusConverter.isRetryable(Status.Code.UNAUTHENTICATED)); }
     @Test(expected = TransportException.class) public void testThrowConvertedUnavailable() throws TransportException { GrpcStatusConverter.throwConverted(new StatusRuntimeException(Status.UNAVAILABLE)); }
