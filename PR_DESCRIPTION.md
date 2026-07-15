@@ -98,3 +98,15 @@ The Docker configuration in `.ci/opensearch/` has been updated to enable gRPC tr
 ### Dependencies
 
 gRPC support is configured as an optional feature (`grpcSupport`) with zero impact on users who don't enable it. Dependencies are `io.grpc` (1.68.0), `com.google.protobuf` (3.25.5), and `org.opensearch:protobufs` (1.2.0).
+
+### Related
+
+This is the Java counterpart to the opensearch-py gRPC implementation, following the same design pattern:
+
+- [opensearch-py #1058](https://github.com/opensearch-project/opensearch-py/pull/1058) — gRPC translation layer
+- [opensearch-py #1078](https://github.com/opensearch-project/opensearch-py/pull/1078) — gRPC transport and connection management
+- [opensearch-py #1087](https://github.com/opensearch-project/opensearch-py/pull/1087) — gRPC TLS & Basic auth
+- [opensearch-py #1089](https://github.com/opensearch-project/opensearch-py/pull/1089) — gRPC SigV4
+- [opensearch-py #1093](https://github.com/opensearch-project/opensearch-py/pull/1093) — gRPC JWT
+
+OpenSearch gRPC API documentation: https://docs.opensearch.org/latest/api-reference/grpc-apis/index/
