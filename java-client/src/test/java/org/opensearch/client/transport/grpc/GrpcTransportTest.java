@@ -30,7 +30,7 @@ import org.opensearch.client.transport.TransportException;
 import org.opensearch.client.transport.TransportOptions;
 
 /**
- * Combined tests for GrpcTransport, HybridTransport, GrpcEndpointRegistry, GrpcTransportOptions.
+ * Combined tests for GrpcTransport, HybridTransport, GrpcTransport endpoint registry, GrpcTransportOptions.
  */
 public class GrpcTransportTest {
 
@@ -60,9 +60,9 @@ public class GrpcTransportTest {
         assertEquals(5, o.maxRetries());
     }
 
-    // ═══ GrpcEndpointRegistry Tests ══════════════════════════════════════════════
+    // ═══ GrpcTransport endpoint registry Tests ══════════════════════════════════════════════
 
-    @Test public void testBulkSupported() { assertTrue(GrpcEndpointRegistry.isSupported(BulkRequest._ENDPOINT)); }
+    @Test public void testBulkSupported() { assertTrue(GrpcTransport.isEndpointSupported(BulkRequest._ENDPOINT)); }
 
     @Test public void testUnsupportedEndpoint() {
         Endpoint<Object, Object, Object> fake = new Endpoint<Object, Object, Object>() {
@@ -72,7 +72,7 @@ public class GrpcTransportTest {
             @Override public boolean isError(int s) { return s >= 400; }
             @Override public org.opensearch.client.json.JsonpDeserializer<Object> errorDeserializer(int s) { return null; }
         };
-        assertFalse(GrpcEndpointRegistry.isSupported(fake));
+        assertFalse(GrpcTransport.isEndpointSupported(fake));
     }
 
     // ═══ GrpcTransport Tests ═════════════════════════════════════════════════════

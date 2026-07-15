@@ -45,6 +45,26 @@ import org.opensearch.protobufs.services.DocumentServiceGrpc;
  */
 public class GrpcTransport implements OpenSearchTransport {
 
+    // ─── Supported Endpoints Registry ────────────────────────────────────────────
+
+    private static final java.util.Set<Endpoint<?, ?, ?>> SUPPORTED_ENDPOINTS;
+
+    static {
+        java.util.Set<Endpoint<?, ?, ?>> endpoints = new java.util.HashSet<>();
+        endpoints.add(BulkRequest._ENDPOINT);
+        // Future: SearchRequest._ENDPOINT, KnnSearchRequest._ENDPOINT
+        SUPPORTED_ENDPOINTS = java.util.Collections.unmodifiableSet(endpoints);
+    }
+
+    /**
+     * Returns true if the given endpoint is supported by gRPC transport.
+     */
+    public static boolean isEndpointSupported(Endpoint<?, ?, ?> endpoint) {
+        return SUPPORTED_ENDPOINTS.contains(endpoint);
+    }
+
+    // ─── Instance Fields ─────────────────────────────────────────────────────────
+
     private final ManagedChannel channel;
     private final DocumentServiceGrpc.DocumentServiceBlockingStub documentStub;
     private final JsonpMapper jsonpMapper;
@@ -79,7 +99,7 @@ public class GrpcTransport implements OpenSearchTransport {
         @Nullable TransportOptions options
     ) throws IOException {
 
-        if (!GrpcEndpointRegistry.isSupported(endpoint)) {
+        if (!GrpcTransport.isEndpointSupported(endpoint)) {
             throw new UnsupportedOperationException(
                 "Endpoint not supported by gRPC transport: " + endpoint.requestUrl(request)
                     + ". Use HybridTransport for automatic REST fallback."

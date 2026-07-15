@@ -80,7 +80,7 @@ public class HybridTransport implements OpenSearchTransport {
     ) throws IOException {
 
         // Route unsupported endpoints directly to REST
-        if (!GrpcEndpointRegistry.isSupported(endpoint)) {
+        if (!GrpcTransport.isEndpointSupported(endpoint)) {
             return restTransport.performRequest(request, endpoint, options);
         }
 
@@ -111,7 +111,7 @@ public class HybridTransport implements OpenSearchTransport {
         @Nullable TransportOptions options
     ) {
         // Route unsupported endpoints directly to REST
-        if (!GrpcEndpointRegistry.isSupported(endpoint)) {
+        if (!GrpcTransport.isEndpointSupported(endpoint)) {
             return restTransport.performRequestAsync(request, endpoint, options);
         }
 
