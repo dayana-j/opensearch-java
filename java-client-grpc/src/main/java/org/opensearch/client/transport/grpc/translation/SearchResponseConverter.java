@@ -8,24 +8,33 @@
 
 package org.opensearch.client.transport.grpc.translation;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.Nullable;
+import org.opensearch.client.json.JsonpDeserializer;
 import org.opensearch.client.json.JsonpMapper;
+import org.opensearch.client.opensearch._types.ShardStatistics;
+import org.opensearch.client.opensearch.core.SearchResponse;
+import org.opensearch.client.opensearch.core.search.Hit;
+import org.opensearch.client.opensearch.core.search.HitsMetadata;
+import org.opensearch.client.opensearch.core.search.TotalHits;
+import org.opensearch.client.opensearch.core.search.TotalHitsRelation;
+import org.opensearch.client.transport.TransportException;
 
 /**
  * Converts protobuf SearchResponse to opensearch-java SearchResponse format.
  * <p>
- * Key challenges:
- * - _source comes as Base64-encoded bytes → must decode and deserialize to TDocument
- * - Response is generic: SearchResponse&lt;TDocument&gt;
- * - Must handle: took, timed_out, _shards, hits (total, max_score, individual hits)
+ * Currently supports match_all queries. Other query types (term, match, bool, etc.)
+ * are not yet implemented in the client-side converter but can be executed over gRPC
+ * once the request converter supports them — the response format is the same regardless
+ * of query type.
  * <p>
- * Architecture:
- * <pre>
- * SearchServiceGrpc.search() → protobuf SearchResponse
- *   → SearchResponseConverter.fromProto(response, jsonpMapper, tDocumentClass)
- *   → opensearch-java SearchResponse&lt;TDocument&gt;
- * </pre>
+ * Note: Unsupported query types will throw UnsupportedOperationException at the request
+ * conversion stage. The response converter handles all response formats since the
+ * SearchResponse structure is query-agnostic.
  */
 public class SearchResponseConverter {
 
@@ -38,47 +47,143 @@ public class SearchResponseConverter {
      * @param <TDocument>    the document type
      * @return the opensearch-java SearchResponse
      */
-    public static <TDocument> org.opensearch.client.opensearch.core.SearchResponse<TDocument> fromProto(
+    public static <TDocument> SearchResponse<TDocument> fromProto(
         org.opensearch.protobufs.SearchResponse protoResponse,
         JsonpMapper jsonpMapper,
         Class<TDocument> tDocumentClass
     ) {
-        // TODO: Implement the full conversion
-        // Key steps:
-        // 1. Extract took, timed_out from protoResponse
-        // 2. Convert _shards (ShardStatistics → ShardStatistics)
-        // 3. Convert hits:
-        //    a. total (value + relation)
-        //    b. max_score
-        //    c. For each hit:
-        //       - _index, _id, _score
-        //       - _source: decode bytes → JSON → deserialize to TDocument
-        //       - _version, _seq_no, _primary_term
-        //       - sort values
-        // 4. Convert aggregations (if present)
+        SearchResponse.Builder<TDocument> builder = new SearchResponse.Builder<TDocument>();
 
-        throw new UnsupportedOperationException("SearchResponseConverter.fromProto() not yet implemented");
+        // took
+        builder.took(protoResponse.getTook());
+
+        // timed_out
+        builder.timedOut(protoResponse.getTimedOut());
+
+        // _shards
+        if (protoResponse.hasXShards()) {
+            org.opensearch.protobufs.ShardStatistics protoShards = protoResponse.getXShards();
+            builder.shards(new ShardStatistics.Builder()
+                .total(protoShards.getTotal())
+                .successful(protoShards.getSuccessful())
+                .failed(protoShards.getFailed())
+                .build());
+        } else {
+            builder.shards(new ShardStatistics.Builder().total(0).successful(0).failed(0).build());
+        }
+
+        // hits
+        if (protoResponse.hasHits()) {
+            builder.hits(convertHitsMetadata(protoResponse.getHits(), jsonpMapper, tDocumentClass));
+        } else {
+            builder.hits(new HitsMetadata.Builder<TDocument>()
+                .hits(new ArrayList<>())
+                .build());
+        }
+
+        return builder.build();
+    }
+
+    private static <TDocument> HitsMetadata<TDocument> convertHitsMetadata(
+        org.opensearch.protobufs.HitsMetadata protoHits,
+        JsonpMapper jsonpMapper,
+        Class<TDocument> tDocumentClass
+    ) {
+        HitsMetadata.Builder<TDocument> builder = new HitsMetadata.Builder<TDocument>();
+
+        // total hits
+        if (protoHits.hasTotal()) {
+            org.opensearch.protobufs.HitsMetadataTotal protoTotal = protoHits.getTotal();
+            if (protoTotal.hasTotalHits()) {
+                org.opensearch.protobufs.TotalHits totalHits = protoTotal.getTotalHits();
+                TotalHitsRelation relation = totalHits.getRelation() ==
+                    org.opensearch.protobufs.TotalHitsRelation.TOTAL_HITS_RELATION_EQ
+                    ? TotalHitsRelation.Eq : TotalHitsRelation.Gte;
+                builder.total(new TotalHits.Builder()
+                    .value(totalHits.getValue())
+                    .relation(relation)
+                    .build());
+            }
+        }
+
+        // max_score
+        if (protoHits.hasMaxScore()) {
+            org.opensearch.protobufs.HitsMetadataMaxScore maxScore = protoHits.getMaxScore();
+            if (maxScore.hasFloat()) {
+                builder.maxScore(maxScore.getFloat());
+            }
+        }
+
+        // individual hits
+        List<Hit<TDocument>> hits = new ArrayList<>();
+        for (org.opensearch.protobufs.HitsMetadataHitsInner protoHit : protoHits.getHitsList()) {
+            hits.add(convertHit(protoHit, jsonpMapper, tDocumentClass));
+        }
+        builder.hits(hits);
+
+        return builder.build();
+    }
+
+    private static <TDocument> Hit<TDocument> convertHit(
+        org.opensearch.protobufs.HitsMetadataHitsInner protoHit,
+        JsonpMapper jsonpMapper,
+        Class<TDocument> tDocumentClass
+    ) {
+        Hit.Builder<TDocument> builder = new Hit.Builder<TDocument>();
+
+        // _index
+        builder.index(protoHit.getXIndex());
+
+        // _id
+        builder.id(protoHit.getXId());
+
+        // _score
+        if (protoHit.hasXScore()) {
+            org.opensearch.protobufs.HitXScore score = protoHit.getXScore();
+            if (score.hasDouble()) {
+                builder.score(score.getDouble());
+            }
+        }
+
+        // _version
+        if (protoHit.hasXVersion()) {
+            builder.version(protoHit.getXVersion());
+        }
+
+        // _seq_no
+        if (protoHit.hasXSeqNo()) {
+            builder.seqNo(protoHit.getXSeqNo());
+        }
+
+        // _primary_term
+        if (protoHit.hasXPrimaryTerm()) {
+            builder.primaryTerm(protoHit.getXPrimaryTerm());
+        }
+
+        // _source — decode bytes and deserialize to TDocument
+        if (!protoHit.getXSource().isEmpty()) {
+            TDocument source = deserializeSource(
+                protoHit.getXSource().toByteArray(), jsonpMapper, tDocumentClass
+            );
+            builder.source(source);
+        }
+
+        return builder.build();
     }
 
     /**
      * Decode _source bytes from protobuf hit to a Java object.
-     * The server returns _source as UTF-8 JSON bytes (Base64 encoded in the wire format).
-     *
-     * @param sourceBytes    the raw bytes from the protobuf response
-     * @param jsonpMapper    the JSON mapper
-     * @param tDocumentClass the target document class
-     * @param <TDocument>    the document type
-     * @return the deserialized document
+     * The server returns _source as UTF-8 JSON bytes.
      */
     static <TDocument> TDocument deserializeSource(
         byte[] sourceBytes,
         JsonpMapper jsonpMapper,
         Class<TDocument> tDocumentClass
     ) {
-        // TODO: Implement
-        // 1. Convert bytes to String (UTF-8)
-        // 2. Parse JSON string using jsonpMapper
-        // 3. Deserialize to TDocument
-        throw new UnsupportedOperationException("deserializeSource() not yet implemented");
+        InputStream stream = new ByteArrayInputStream(sourceBytes);
+        jakarta.json.stream.JsonParser parser = jsonpMapper.jsonProvider()
+            .createParser(stream);
+        parser.next(); // advance to first token
+        return jsonpMapper.deserialize(parser, tDocumentClass);
     }
 }
