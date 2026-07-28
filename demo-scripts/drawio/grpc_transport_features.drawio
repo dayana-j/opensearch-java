@@ -1,0 +1,101 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="gRPC Transport Features" id="grpc-features">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="&lt;font size=&quot;4&quot;&gt;&lt;b&gt;gRPC Transport Features — Full Parity with REST&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;i&gt;Same capabilities, different wire protocol&lt;/i&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="480" y="20" width="450" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- ═══ Authentication ═══ -->
+        <mxCell id="auth-group" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1565c0;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="90" width="350" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="auth-title" value="&lt;font size=&quot;2&quot; color=&quot;#1565c0&quot;&gt;&lt;b&gt;🔐 Authentication&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="140" y="100" width="150" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="auth1" value="&lt;b&gt;✅ Basic Auth&lt;/b&gt;&lt;br&gt;Username + password via interceptor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#1565c0;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="130" width="310" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="auth2" value="&lt;b&gt;✅ JWT / Bearer Token&lt;/b&gt;&lt;br&gt;Auto-refreshing token supplier" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#1565c0;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="180" width="310" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="auth3" value="&lt;b&gt;✅ AWS SigV4&lt;/b&gt;&lt;br&gt;Body-aware IAM signing (AwsGrpcTransport)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#1565c0;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="230" width="310" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="auth4" value="&lt;b&gt;✅ TLS / mTLS&lt;/b&gt;&lt;br&gt;Custom certs, trust stores, hostname override" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#1565c0;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="280" width="310" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ═══ Connection Management ═══ -->
+        <mxCell id="conn-group" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#6a1b9a;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="420" y="90" width="350" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-title" value="&lt;font size=&quot;2&quot; color=&quot;#6a1b9a&quot;&gt;&lt;b&gt;🔌 Connection Management&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="490" y="100" width="210" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="conn1" value="&lt;b&gt;✅ Health Monitoring&lt;/b&gt;&lt;br&gt;Connectivity state machine (READY/IDLE/FAILURE)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#6a1b9a;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="440" y="130" width="310" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="conn2" value="&lt;b&gt;✅ Keep-Alive&lt;/b&gt;&lt;br&gt;Configurable ping interval + timeout" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#6a1b9a;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="440" y="180" width="310" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="conn3" value="&lt;b&gt;✅ Automatic Retries&lt;/b&gt;&lt;br&gt;Configurable max retries + exponential backoff" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#6a1b9a;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="440" y="230" width="310" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="conn4" value="&lt;b&gt;✅ Idle Timeout &amp; Deadlines&lt;/b&gt;&lt;br&gt;Per-request and channel-level timeouts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#6a1b9a;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="440" y="280" width="310" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ═══ Operations ═══ -->
+        <mxCell id="ops-group" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#2e7d32;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="800" y="90" width="350" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="ops-title" value="&lt;font size=&quot;2&quot; color=&quot;#2e7d32&quot;&gt;&lt;b&gt;⚡ Supported Operations&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="880" y="100" width="190" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="ops1" value="&lt;b&gt;✅ Bulk&lt;/b&gt; (index, create, update, delete)&lt;br&gt;Full protobuf translation, all 4 op types" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#2e7d32;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="820" y="130" width="310" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ops2" value="&lt;b&gt;🔜 Search&lt;/b&gt; (server-side GA in 3.5.0)&lt;br&gt;Client support planned — extensible architecture" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#2e7d32;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="820" y="180" width="310" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ops3" value="&lt;b&gt;🔜 k-NN / Vector Search&lt;/b&gt; (server-side GA)&lt;br&gt;Client support planned — same pattern as Bulk" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#2e7d32;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="820" y="230" width="310" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ops4" value="&lt;b&gt;➡️ Everything Else&lt;/b&gt; → routed to REST&lt;br&gt;search, info, index mgmt (via HybridTransport)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#2e7d32;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="820" y="280" width="310" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ═══ Transport Config ═══ -->
+        <mxCell id="config-group" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#e65100;arcSize=5;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="90" width="350" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="config-title" value="&lt;font size=&quot;2&quot; color=&quot;#e65100&quot;&gt;&lt;b&gt;⚙️ Configuration&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="1280" y="100" width="140" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="config1" value="&lt;b&gt;✅ Max Inbound Message Size&lt;/b&gt;&lt;br&gt;Default 10MB, configurable for large bulk" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#e65100;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="130" width="310" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="config2" value="&lt;b&gt;✅ Custom Interceptors&lt;/b&gt;&lt;br&gt;Add your own gRPC interceptors" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#e65100;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="180" width="310" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="config3" value="&lt;b&gt;✅ Channel Factory&lt;/b&gt;&lt;br&gt;Plaintext or TLS, auto-configured" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#e65100;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="230" width="310" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="config4" value="&lt;b&gt;✅ Hybrid Transport&lt;/b&gt;&lt;br&gt;Auto-routes: supported → gRPC, else → REST" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#e65100;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="280" width="310" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ═══ Bottom: Key Takeaway ═══ -->
+        <mxCell id="takeaway" value="&lt;font size=&quot;2&quot;&gt;&lt;b&gt;Key Takeaway:&lt;/b&gt; The gRPC transport isn't a stripped-down version — it supports the same auth, TLS, and connection management features customers already use with REST. The only difference is what goes over the wire (binary protobuf instead of JSON text).&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666;arcSize=5;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="350" width="1490" height="45" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

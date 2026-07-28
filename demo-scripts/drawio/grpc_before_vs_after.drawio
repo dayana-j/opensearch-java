@@ -1,0 +1,186 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Before vs After - gRPC Transparent Support" id="before-after">
+    <mxGraphModel dx="1600" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ==================== BEFORE SECTION ==================== -->
+        <mxCell id="before-title" value="&lt;font size=&quot;4&quot; color=&quot;#CC0000&quot;&gt;&lt;b&gt;BEFORE: Manual gRPC (What Clients Must Do Today)&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="450" y="20" width="520" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Before Step 1 -->
+        <mxCell id="b1" value="&lt;b&gt;1. Import Protobuf &amp;&lt;br&gt;gRPC Libraries&lt;/b&gt;&lt;hr&gt;&lt;font face=&quot;Courier New&quot; size=&quot;1&quot;&gt;import grpc&lt;br&gt;from opensearch.protobufs&lt;br&gt;  .schemas import *&lt;br&gt;from opensearch.protobufs&lt;br&gt;  .services import&lt;br&gt;  DocumentServiceStub&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;arcSize=10;align=center;verticalAlign=top;spacingTop=5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="190" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Before Step 2 -->
+        <mxCell id="b2" value="&lt;b&gt;2. Create gRPC&lt;br&gt;Channel Manually&lt;/b&gt;&lt;hr&gt;&lt;font face=&quot;Courier New&quot; size=&quot;1&quot;&gt;channel = grpc&lt;br&gt;  .insecure_channel(&lt;br&gt;  &quot;localhost:9400&quot;)&lt;br&gt;&lt;br&gt;stub = DocumentService&lt;br&gt;  Stub(channel)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;arcSize=10;align=center;verticalAlign=top;spacingTop=5;" vertex="1" parent="1">
+          <mxGeometry x="270" y="60" width="190" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Before Step 3 -->
+        <mxCell id="b3" value="&lt;b&gt;3. Build Request in&lt;br&gt;Protobuf Syntax&lt;/b&gt;&lt;hr&gt;&lt;font face=&quot;Courier New&quot; size=&quot;1&quot;&gt;body = BulkRequestBody(&lt;br&gt;  operation_container=&lt;br&gt;    OperationContainer(&lt;br&gt;      index=IndexOperation()&lt;br&gt;    )&lt;br&gt;)&lt;br&gt;body.object = doc&lt;br&gt;  .encode('utf-8')&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;arcSize=10;align=center;verticalAlign=top;spacingTop=5;" vertex="1" parent="1">
+          <mxGeometry x="500" y="60" width="200" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Before Step 4 -->
+        <mxCell id="b4" value="&lt;b&gt;4. Send via Stub &amp;&lt;br&gt;Handle gRPC Errors&lt;/b&gt;&lt;hr&gt;&lt;font face=&quot;Courier New&quot; size=&quot;1&quot;&gt;try:&lt;br&gt;  resp = stub.Bulk(&lt;br&gt;    request=request)&lt;br&gt;except grpc.RpcError:&lt;br&gt;  if e.code() ==&lt;br&gt;    UNAVAILABLE: ...&lt;br&gt;  elif PERMISSION_&lt;br&gt;    DENIED: ...&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;arcSize=10;align=center;verticalAlign=top;spacingTop=5;" vertex="1" parent="1">
+          <mxGeometry x="740" y="60" width="190" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Before Step 5 -->
+        <mxCell id="b5" value="&lt;b&gt;5. Parse Protobuf&lt;br&gt;Response&lt;/b&gt;&lt;hr&gt;&lt;font face=&quot;Courier New&quot; size=&quot;1&quot;&gt;for item in&lt;br&gt;  response.items:&lt;br&gt;  item.index.status&lt;br&gt;  item.index.result&lt;br&gt;  item.index.x_seq_no&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;i&gt;❌ Not a Python dict&lt;br&gt;❌ Different API&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;arcSize=10;align=center;verticalAlign=top;spacingTop=5;" vertex="1" parent="1">
+          <mxGeometry x="970" y="60" width="190" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Before Step 6 -->
+        <mxCell id="b6" value="&lt;b&gt;6. Need REST too?&lt;br&gt;Separate Client&lt;/b&gt;&lt;hr&gt;&lt;br&gt;&lt;i&gt;❌ No search via gRPC&lt;br&gt;❌ No info() via gRPC&lt;br&gt;❌ Maintain 2 clients&lt;br&gt;❌ 2 connection pools&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcccc;strokeColor=#CC0000;arcSize=10;align=center;verticalAlign=top;spacingTop=5;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="60" width="190" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows between before steps -->
+        <mxCell id="ba12" value="" style="endArrow=block;endSize=10;endFill=1;html=1;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="230" y="135" as="sourcePoint" /><mxPoint x="270" y="135" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="ba23" value="" style="endArrow=block;endSize=10;endFill=1;html=1;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="460" y="135" as="sourcePoint" /><mxPoint x="500" y="135" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="ba34" value="" style="endArrow=block;endSize=10;endFill=1;html=1;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="700" y="135" as="sourcePoint" /><mxPoint x="740" y="135" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="ba45" value="" style="endArrow=block;endSize=10;endFill=1;html=1;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="930" y="135" as="sourcePoint" /><mxPoint x="970" y="135" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="ba56" value="" style="endArrow=block;endSize=10;endFill=1;html=1;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="1160" y="135" as="sourcePoint" /><mxPoint x="1200" y="135" as="targetPoint" /></mxGeometry></mxCell>
+
+        <!-- Before summary -->
+        <mxCell id="before-summary" value="&lt;font color=&quot;#CC0000&quot;&gt;&lt;b&gt;⚠ Full client-side rewrite required:&lt;/b&gt; different imports, different syntax, different response types, manual channel/auth/TLS, no REST fallback&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffebee;strokeColor=#CC0000;arcSize=5;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="225" width="1350" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== DIVIDER ==================== -->
+        <mxCell id="divider" value="" style="endArrow=none;html=1;strokeWidth=3;strokeColor=#666666;dashed=1;dashPattern=8 8;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="40" y="290" as="sourcePoint" /><mxPoint x="1390" y="290" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <!-- ==================== AFTER SECTION ==================== -->
+        <mxCell id="after-title" value="&lt;font size=&quot;4&quot; color=&quot;#009900&quot;&gt;&lt;b&gt;AFTER: Transparent gRPC Support (What We Built)&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="450" y="300" width="500" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- After: User Code -->
+        <mxCell id="a1" value="&lt;b&gt;Your Application&lt;/b&gt;&lt;hr&gt;&lt;font face=&quot;Courier New&quot; size=&quot;1&quot;&gt;client = OpenSearchGrpc(&lt;br&gt;  hosts=[{REST}],&lt;br&gt;  grpc_hosts=[{gRPC}]&lt;br&gt;)&lt;br&gt;&lt;br&gt;client.bulk(body=docs)&lt;br&gt;client.search(...)&lt;br&gt;client.info()&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;&lt;font color=&quot;#009900&quot;&gt;✅ Same API as REST&lt;/font&gt;&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;arcSize=10;align=center;verticalAlign=top;spacingTop=5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="340" width="200" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- After: HybridTransport -->
+        <mxCell id="a2" value="&lt;b&gt;HybridTransport&lt;/b&gt;&lt;hr&gt;&lt;br&gt;Automatic routing:&lt;br&gt;&lt;font face=&quot;Courier New&quot; size=&quot;1&quot;&gt;bulk()   → gRPC (:9400)&lt;br&gt;search() → REST (:9200)&lt;br&gt;info()   → REST (:9200)&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;&lt;font color=&quot;#009900&quot;&gt;✅ No manual routing&lt;/font&gt;&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;arcSize=10;align=center;verticalAlign=top;spacingTop=5;" vertex="1" parent="1">
+          <mxGeometry x="310" y="340" width="200" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- After: Translation Layer -->
+        <mxCell id="a3" value="&lt;b&gt;Translation Layer&lt;/b&gt;&lt;hr&gt;&lt;br&gt;Converts automatically:&lt;br&gt;&lt;font face=&quot;Courier New&quot; size=&quot;1&quot;&gt;dict → Protobuf (request)&lt;br&gt;Protobuf → dict (response)&lt;/font&gt;&lt;br&gt;&lt;br&gt;User sees same format&lt;br&gt;as REST response&lt;br&gt;&lt;br&gt;&lt;b&gt;&lt;font color=&quot;#009900&quot;&gt;✅ No protobuf knowledge&lt;br&gt;needed&lt;/font&gt;&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;arcSize=10;align=center;verticalAlign=top;spacingTop=5;" vertex="1" parent="1">
+          <mxGeometry x="580" y="340" width="210" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- After: gRPC Channel (managed) -->
+        <mxCell id="a4" value="&lt;b&gt;Managed gRPC Channel&lt;/b&gt;&lt;hr&gt;&lt;br&gt;Built-in:&lt;br&gt;&lt;font face=&quot;Courier New&quot; size=&quot;1&quot;&gt;• TLS configuration&lt;br&gt;• Basic Auth / JWT / SigV4&lt;br&gt;• Connection health&lt;br&gt;• Auto-reconnect&lt;br&gt;• Retry logic&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;&lt;font color=&quot;#009900&quot;&gt;✅ No channel management&lt;/font&gt;&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;arcSize=10;align=center;verticalAlign=top;spacingTop=5;" vertex="1" parent="1">
+          <mxGeometry x="860" y="340" width="200" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- After: OpenSearch Server -->
+        <mxCell id="a5" value="&lt;b&gt;OpenSearch Server&lt;/b&gt;&lt;hr&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; size=&quot;1&quot;&gt;gRPC :9400 (bulk)&lt;br&gt;REST :9200 (everything else)&lt;/font&gt;&lt;br&gt;&lt;br&gt;Same cluster,&lt;br&gt;same data,&lt;br&gt;two transports" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;arcSize=10;align=center;verticalAlign=top;spacingTop=5;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="340" width="200" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows between after steps -->
+        <mxCell id="aa12" value="" style="endArrow=block;endSize=10;endFill=1;html=1;strokeWidth=2;strokeColor=#009900;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="240" y="430" as="sourcePoint" /><mxPoint x="310" y="430" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="aa23" value="" style="endArrow=block;endSize=10;endFill=1;html=1;strokeWidth=2;strokeColor=#009900;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="510" y="430" as="sourcePoint" /><mxPoint x="580" y="430" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="aa34" value="" style="endArrow=block;endSize=10;endFill=1;html=1;strokeWidth=2;strokeColor=#009900;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="790" y="430" as="sourcePoint" /><mxPoint x="860" y="430" as="targetPoint" /></mxGeometry></mxCell>
+        <mxCell id="aa45" value="" style="endArrow=block;endSize=10;endFill=1;html=1;strokeWidth=2;strokeColor=#009900;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="1060" y="430" as="sourcePoint" /><mxPoint x="1130" y="430" as="targetPoint" /></mxGeometry></mxCell>
+
+        <!-- After summary -->
+        <mxCell id="after-summary" value="&lt;font color=&quot;#009900&quot;&gt;&lt;b&gt;✅ Zero code changes:&lt;/b&gt; same client.bulk() call, same response format. Transport handles protobuf conversion, channel management, auth, and routing automatically.&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#009900;arcSize=5;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="535" width="1290" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== COMPARISON TABLE ==================== -->
+        <mxCell id="table-title" value="&lt;b&gt;Side-by-Side Comparison&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="550" y="590" width="200" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Table Header -->
+        <mxCell id="th1" value="&lt;b&gt;Aspect&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e0e0;strokeColor=#999999;align=center;" vertex="1" parent="1">
+          <mxGeometry x="200" y="625" width="200" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="th2" value="&lt;b&gt;&lt;font color=&quot;#CC0000&quot;&gt;Before (Manual)&lt;/font&gt;&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e0e0;strokeColor=#999999;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="625" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="th3" value="&lt;b&gt;&lt;font color=&quot;#009900&quot;&gt;After (Transparent)&lt;/font&gt;&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e0e0e0;strokeColor=#999999;align=center;" vertex="1" parent="1">
+          <mxGeometry x="700" y="625" width="300" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Row 1 -->
+        <mxCell id="r1a" value="Client code" style="rounded=0;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="200" y="655" width="200" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r1b" value="&lt;font face=&quot;Courier New&quot;&gt;stub.Bulk(protobuf_request)&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="655" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r1c" value="&lt;font face=&quot;Courier New&quot;&gt;client.bulk(body=docs)&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e8f5e9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="700" y="655" width="300" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Row 2 -->
+        <mxCell id="r2a" value="Dependencies" style="rounded=0;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="200" y="685" width="200" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r2b" value="grpc, protobufs, stubs (you manage)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="685" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r2c" value="pip install opensearch-py[grpc]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e8f5e9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="700" y="685" width="300" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Row 3 -->
+        <mxCell id="r3a" value="Connection" style="rounded=0;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="200" y="715" width="200" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r3b" value="Create channel, manage lifecycle" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="715" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r3c" value="Automatic (built into transport)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e8f5e9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="700" y="715" width="300" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Row 4 -->
+        <mxCell id="r4a" value="Auth / TLS" style="rounded=0;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="200" y="745" width="200" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r4b" value="Attach headers to channel manually" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="745" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r4c" value="Config at init: basicAuth / jwt / sigV4" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e8f5e9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="700" y="745" width="300" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Row 5 -->
+        <mxCell id="r5a" value="Response format" style="rounded=0;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="200" y="775" width="200" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r5b" value="Protobuf objects (new API to learn)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="775" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r5c" value="Same dict/object as REST" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e8f5e9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="700" y="775" width="300" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Row 6 -->
+        <mxCell id="r6a" value="Non-bulk operations" style="rounded=0;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="200" y="805" width="200" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r6b" value="Maintain separate REST client" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="805" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="r6c" value="Routed to REST automatically" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e8f5e9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="700" y="805" width="300" height="30" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
